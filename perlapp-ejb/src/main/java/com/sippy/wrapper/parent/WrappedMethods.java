@@ -1,13 +1,22 @@
 package com.sippy.wrapper.parent;
 
 import com.sippy.wrapper.parent.database.DatabaseConnection;
+import com.sippy.wrapper.parent.database.dao.TnbDao;
+import com.sippy.wrapper.parent.dto.TnbDto;
+import com.sippy.wrapper.parent.request.GetTnbRequest;
 import com.sippy.wrapper.parent.request.JavaTestRequest;
 import com.sippy.wrapper.parent.response.JavaTestResponse;
-import java.util.*;
-import javax.ejb.EJB;
-import javax.ejb.Stateless;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.ejb.EJB;
+import javax.ejb.Stateless;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 @Stateless
 public class WrappedMethods {
@@ -34,6 +43,50 @@ public class WrappedMethods {
     jsonResponse.put("faultCode", "200");
     jsonResponse.put("faultString", "Method success");
     jsonResponse.put("something", response);
+
+    return jsonResponse;
+  }
+
+  @RpcMethod(name = "getTnbList")
+  public Map<String, Object> getTnbList(GetTnbRequest request) {
+    final var number = request.number();
+    LOGGER.info("Start getTnbList with number: {}", number);
+    LOGGER.info("Fetching TNB list from the database...");
+
+    final var allTnbs = databaseConnection.getAllTnbs();
+
+    Optional<TnbDao> tnbMatchingNumber = Optional.empty();
+    if (number != null) {
+      tnbMatchingNumber = allTnbs
+              .stream()
+              .filter(tnbDao -> Objects.equals(tnbDao.getTnb(), number))
+              .findFirst();
+    }
+    var tnbMatchingNumberIsTnb = false;
+    if (tnbMatchingNumber.isPresent()) {
+      tnbMatchingNumberIsTnb = tnbMatchingNumber.get().getTnb().equals("D001");
+    }
+
+    final ArrayList<TnbDto> tnbs = new ArrayList();
+    tnbs.add(new TnbDto("D001", "Deutsche Telekom", tnbMatchingNumberIsTnb));
+
+    for (TnbDao tnb : allTnbs) {
+      if (tnb.getTnb().equals("D146") || tnb.getTnb().equals("D218") || tnb.getTnb().equals("D248")) {
+        continue;
+      }
+      var matchesNumberFromRequest = false;
+      if (tnbMatchingNumber.isPresent()) {
+        matchesNumberFromRequest = tnbMatchingNumber.get().getTnb().equals(tnb.getTnb());
+      }
+      tnbs.add(new TnbDto(tnb.getTnb(), tnb.getName(), matchesNumberFromRequest));
+    }
+
+    tnbs.sort(Comparator.comparing(tnbDto -> tnbDto.name().toLowerCase()));
+
+    Map<String, Object> jsonResponse = new HashMap<>();
+    jsonResponse.put("faultCode", "200");
+    jsonResponse.put("faultString", "Method success");
+    jsonResponse.put("tnbs", tnbs);
 
     return jsonResponse;
   }
